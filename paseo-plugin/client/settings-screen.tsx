@@ -1,43 +1,54 @@
 import type { PluginSurfaceProps } from "@getpaseo/plugin/client";
 import { useSettings } from "@getpaseo/plugin/client";
 import { Pressable, Text, View } from "react-native";
-import { DEFAULT_STREAM_STATS, streamStatsSettings, type StreamStatsSettings } from "../shared/settings";
+import {
+  DEFAULT_STREAM_STATS,
+  statsGeometry,
+  streamStatsSettings,
+  type StreamStatsSettings,
+} from "../shared/settings";
 
 /**
  * Settings → Plugins → 回答统计行.
  *
  * The host renders plugin settings only as screens a plugin registers, so the
- * two numbers the stats row reads are edited here: how far the row sits under
- * the completed-turn footer, and how large its text is. Both default to the
- * geometry Paseo's own footer draws with, so leaving this page alone keeps the
- * row looking like part of that footer.
+ * two ratios the stats row reads are edited here: how far the row sits under
+ * the completed-turn footer (in em, so it follows the text size), and how large
+ * its text is relative to Paseo's own footer. The defaults reproduce that
+ * footer's geometry, so leaving this page alone keeps the row looking like part
+ * of it — on every screen size.
  */
-const FIELDS: Array<{
+interface Field {
   key: keyof StreamStatsSettings;
   label: string;
   hint: string;
   min: number;
   max: number;
   step: number;
-  unit: string;
-}> = [
+  /** What the number means to a reader, given the ratios currently in force. */
+  describe: (values: StreamStatsSettings) => string;
+}
+
+const FIELDS: Field[] = [
   {
-    key: "gapPx",
+    key: "gapEm",
     label: "与页脚的间距",
-    hint: "回合页脚最后一行文字到统计行的距离",
+    hint: "按字号的比例计算，不随屏幕或机型变化",
     min: 0,
-    max: 24,
-    step: 1,
-    unit: "px",
+    max: 2,
+    step: 0.05,
+    describe: (values) =>
+      `${values.gapEm.toFixed(2)} em（约 ${Math.round(statsGeometry(values).gap)}px）`,
   },
   {
-    key: "fontSize",
+    key: "fontScale",
     label: "字号",
-    hint: "Paseo 自己的回合页脚用 13px",
-    min: 10,
-    max: 16,
-    step: 1,
-    unit: "px",
+    hint: "相对 Paseo 回合页脚的 13px",
+    min: 0.75,
+    max: 1.5,
+    step: 0.05,
+    describe: (values) =>
+      `${Math.round(values.fontScale * 100)}%（${statsGeometry(values).fontSize}px）`,
   },
 ];
 
@@ -68,25 +79,25 @@ export function StreamStatsSettingsScreen({ theme }: PluginSurfaceProps) {
                 disabled={!editable || value <= field.min}
                 border={theme.colors.border}
                 color={theme.colors.foreground}
-                onPress={() => set(field.key, Math.max(field.min, value - field.step))}
+                onPress={() => set(field.key, Math.max(field.min, round(value - field.step)))}
               />
               <Text
                 style={{
                   color: theme.colors.foreground,
                   fontSize: 14,
-                  minWidth: 64,
+                  minWidth: 128,
                   textAlign: "center",
                   fontVariant: ["tabular-nums"],
                 }}
               >
-                {`${value} ${field.unit}`}
+                {field.describe(values)}
               </Text>
               <StepButton
                 label="+"
                 disabled={!editable || value >= field.max}
                 border={theme.colors.border}
                 color={theme.colors.foreground}
-                onPress={() => set(field.key, Math.min(field.max, value + field.step))}
+                onPress={() => set(field.key, Math.min(field.max, round(value + field.step)))}
               />
             </View>
           </View>
@@ -102,13 +113,11 @@ export function StreamStatsSettingsScreen({ theme }: PluginSurfaceProps) {
         }}
         style={{ alignSelf: "flex-start", paddingVertical: 6 }}
       >
-        <Text style={{ color: muted, fontSize: 12 }}>恢复默认（间距 6px，字号 13px）</Text>
+        <Text style={{ color: muted, fontSize: 12 }}>恢复默认（间距 0.46 em，字号 100%）</Text>
       </Pressable>
       {settings.status === "ready" ? null : (
         <Text style={{ color: theme.colors.statusWarning, fontSize: 12 }}>
-          {settings.status === "loading"
-            ? "正在读取设置…"
-            : `设置不可用：${settings.error}`}
+          {settings.status === "loading" ? "正在读取设置…" : `设置不可用：${settings.error}`}
         </Text>
       )}
       {settings.saveError === null ? null : (
@@ -116,6 +125,11 @@ export function StreamStatsSettingsScreen({ theme }: PluginSurfaceProps) {
       )}
     </View>
   );
+}
+
+/** Stepping by 0.05 must not drift into 0.45000000000000007 and fail the schema. */
+function round(value: number): number {
+  return Math.round(value * 100) / 100;
 }
 
 function StepButton(props: {

@@ -375,10 +375,13 @@ peer/dev 依赖。这样 `requirements.paseo: ">=0.9.2"` 才名副其实。
    ResizeObserver）就不补偿，保持宿主给的间距。
 3. 会碰 DOM 的 `getBoundingClientRect` / `querySelectorAll` / `ResizeObserver` 只在
    `client/web.ts` 里，按 `Platform.OS === "web"` 兜底成 no-op；共享渲染器只拿到数字或 null。
-4. 间距与字号不再是常量：`shared/settings.ts` 用 `defineSettings` 声明，服务端
-   `registerSettings` 注册，客户端 `useSettings` 读。默认值就是页脚自己的几何
-   （间距 6px、字号 `STREAM_METADATA_FONT_SIZE` = 13px），所以在 Settings → Plugins 里
-   不动它就等于对齐页脚。
+4. 间距与字号不再是常量，也**不是像素**：`shared/settings.ts` 用 `defineSettings` 声明两个
+   比例——`gapEm`（间距是字号的多少倍，默认 0.46 = 6/13）和 `fontScale`（字号相对页脚的
+   `STREAM_METADATA_FONT_SIZE` = 13px，默认 1）。服务端 `registerSettings` 注册，客户端
+   `useSettings` 读，行内所有小间距（缩进、展开行的行距）也都是字号的分数。用比例而不是
+   写死的 px，是因为同一台机器上字号会被主题插件、Paseo 的外观字号、iOS/Android 的系统
+   字号各自放大一遍——固定的 6px 在这些组合里会显得挤，而 0.46em 不会。默认值解析回来
+   仍然正好是 6px / 13px，所以不动设置就等于对齐页脚。
 
 > **教训**：插件能控制的只有自己的 item 容器，别人家的间距只能"补偿"。**补偿要量、不要猜**：
 > 一旦对方的间距会随主题/状态变化，任何写死的常量都只在被观测到的那一种组合里正确。

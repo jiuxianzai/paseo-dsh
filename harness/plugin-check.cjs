@@ -326,9 +326,10 @@ const check = (name, pass, detail) => {
   );
 
   // 1e. the row's geometry is settings, not constants: the settings screen
-  // writes them and the row reads them. The defaults have to stay the ones the
-  // row was drawn against (Paseo's footer: 6px above, 13px text), or a plugin
-  // with no stored settings would render a row that does not line up.
+  // writes them and the row reads them. They are ratios (em and a font scale)
+  // so the gap follows the text size instead of a per-device pixel number, and
+  // the defaults have to resolve back to the geometry the row was drawn
+  // against: Paseo's footer text at 13px, 6px of air above the row.
   const settingsDefaults = (() => {
     try {
       return settingsRegistration?.schema?.parse({}) ?? null;
@@ -336,16 +337,26 @@ const check = (name, pass, detail) => {
       return null;
     }
   })();
+  const geometry = (() => {
+    try {
+      return require("./shared/settings.js").statsGeometry(settingsDefaults);
+    } catch {
+      return null;
+    }
+  })();
   check(
-    "stats row geometry is registered as settings",
+    "stats row geometry is registered as ratios",
     settingsRegistration?.id === "stream-stats" &&
       settingsRegistration?.scope === "host" &&
-      settingsDefaults?.gapPx === 6 &&
-      settingsDefaults?.fontSize === 13,
+      settingsDefaults?.gapEm === 0.46 &&
+      settingsDefaults?.fontScale === 1 &&
+      geometry?.fontSize === 13 &&
+      geometry?.gap === 6,
     JSON.stringify({
       id: settingsRegistration?.id,
       scope: settingsRegistration?.scope,
       defaults: settingsDefaults,
+      resolved: geometry,
     }),
   );
 

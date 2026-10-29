@@ -3,7 +3,7 @@ import { useSettings } from "@getpaseo/plugin/client";
 import { Fragment, useLayoutEffect, useRef, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { z } from "zod";
-import { DEFAULT_STREAM_STATS, streamStatsSettings } from "../shared/settings";
+import { DEFAULT_STREAM_STATS, statsGeometry, streamStatsSettings } from "../shared/settings";
 import { measureFooterLift, watchFooter } from "./web";
 
 export const streamStatsSchema = z.object({
@@ -101,8 +101,9 @@ function StreamStatsRow({ item, theme, layout }: PluginTimelineItemProps<StreamS
   /** The lift currently in the DOM, which the next measurement has to discount. */
   const appliedLift = useRef(0);
   const settings = useSettings(streamStatsSettings);
-  const gap = settings.status === "ready" ? settings.values.gapPx : DEFAULT_STREAM_STATS.gapPx;
-  const fontSize = settings.status === "ready" ? settings.values.fontSize : DEFAULT_STREAM_STATS.fontSize;
+  const { fontSize, gap } = statsGeometry(
+    settings.status === "ready" ? settings.values : DEFAULT_STREAM_STATS,
+  );
   const data = item.data;
 
   const applyLift = (next: number) => {
@@ -143,6 +144,10 @@ function StreamStatsRow({ item, theme, layout }: PluginTimelineItemProps<StreamS
     lineHeight: Math.round(fontSize * LINE_HEIGHT_RATIO),
     fontVariant: ["tabular-nums"] as const,
   };
+  /** The row's small offsets, kept as fractions of its text size (~2px at 13). */
+  const inset = Math.max(1, Math.round(fontSize * 0.15));
+  /** Between the expanded detail lines (~1px at 13). */
+  const detailGap = Math.max(1, Math.round(fontSize * 0.1));
 
   const ratio = contextRatio(data);
   const segments: Array<{ text: string; color: string }> = [];
@@ -166,7 +171,10 @@ function StreamStatsRow({ item, theme, layout }: PluginTimelineItemProps<StreamS
   const details = [contextLine(data), tokensLine(data), routeLine(data), toolsLine(data)].filter(
     (line): line is string => line !== undefined,
   );
-  const nativeLift = gap - TURN_FOOTER_BOTTOM_PADDING;
+  // Native cannot measure the footer, so it subtracts the host's reserved
+  // padding. A gap larger than that padding would push the row down instead of
+  // pulling it up; never do that.
+  const nativeLift = Math.min(0, gap - TURN_FOOTER_BOTTOM_PADDING);
 
   return (
     <Pressable
@@ -178,7 +186,10 @@ function StreamStatsRow({ item, theme, layout }: PluginTimelineItemProps<StreamS
         alignSelf: "flex-start",
         marginTop: data.final === true ? (layout.platform === "web" ? lift : nativeLift) : 0,
         marginBottom: 0,
-        paddingLeft: 2,
+        // Every distance in this row is a fraction of its own text size, so a
+        // reader who scales the text up gets the same rhythm instead of a
+        // 2px indent that disappears inside the glyphs.
+        paddingLeft: inset,
       }}
     >
       <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap" }}>
@@ -191,7 +202,7 @@ function StreamStatsRow({ item, theme, layout }: PluginTimelineItemProps<StreamS
         <Text style={base}>{open ? " ▴" : " ▾"}</Text>
       </View>
       {open ? (
-        <View style={{ marginTop: 2, gap: 1 }}>
+        <View style={{ marginTop: inset, gap: detailGap }}>
           {details.map((line) => (
             <Text key={line} style={base}>
               {line}
